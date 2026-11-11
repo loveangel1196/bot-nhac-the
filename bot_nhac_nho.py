@@ -35,7 +35,7 @@ TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
 # NẾU BẠN CHƯA CÀI TRONG TAB VARIABLES, HÃY DÁN TOKEN THẬT VÀO GIỮA CẶP NGOẶC DƯỚI ĐÂY:
 if not TOKEN:
-    TOKEN = "DÁN_TOKEN_THẬT_CỦA_BẠN_VÀO_ĐÂY"
+    TOKEN = "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA"
 
 # Link GitHub Pages chứa file index.html của bạn
 WEB_APP_URL = "https://loveangel1196.github.io/bot-nhac-the/"
