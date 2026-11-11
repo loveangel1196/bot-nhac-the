@@ -16,19 +16,26 @@ TOKEN = "9042194702:AAEuNzFXtzz27GWq3MMDv9BOHZqhFVg4UxM"
 # Lưu trữ tiến trình nhắc nhở theo chat_id
 active_reminders = {}
 
+def get_user_mention(user):
+    """Lấy định dạng gọi tên chuẩn @username hoặc link profile"""
+    if user.username:
+        return f"@{user.username}"
+    else:
+        return f"[{user.full_name}](tg://user?id={user.id})"
+
 async def send_menu(chat_id, context):
-    """Gửi bảng điều khiển dạng Inline gọn gàng, chuyên nghiệp"""
+    """Gửi bảng menu 3 nút bấm Inline dạng icon nổi bật"""
     keyboard = [
         [
-            InlineKeyboardButton("⏱️ 10 Phút", callback_data="time_9"),
-            InlineKeyboardButton("⏱️ 20 Phút", callback_data="time_19"),
-            InlineKeyboardButton("⏱️ 30 Phút", callback_data="time_29")
+            InlineKeyboardButton("🟢 10 Phút", callback_data="time_9"),
+            InlineKeyboardButton("🟡 20 Phút", callback_data="time_19"),
+            InlineKeyboardButton("🔴 30 Phút", callback_data="time_29")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await context.bot.send_message(
         chat_id=chat_id,
-        text="🤖 **HỆ THỐNG NHẮC ĐÁNH THẺ (CLOCK OUT)**\n\n📌 *Vui lòng chọn thời gian bên dưới để bắt đầu đếm ngược:*",
+        text="👋 **Nhắc đánh thẻ Bot**\nVui lòng bấm chọn thời gian bên dưới hoặc gõ trực tiếp số (`10`, `20`, `30`):",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -47,15 +54,8 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(1)
             await send_menu(chat_id, context)
 
-def get_user_mention(user):
-    """Lấy định dạng gọi tên chuẩn @username hoặc link profile"""
-    if user.username:
-        return f"@{user.username}"
-    else:
-        return f"[{user.full_name}](tg://user?id={user.id})"
-
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cho phép gõ nhanh số 10, 20, 30 trên nhóm"""
+    """Xử lý khi người dùng gõ trực tiếp số 10, 20, 30 lên nhóm"""
     if not update.message or not update.message.text:
         return
         
@@ -78,7 +78,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             active_reminders[chat_id].cancel()
 
         await update.message.reply_text(
-            text=f"✅ Đã ghi nhận! **{user_mention}** hẹn giờ **{display_text}**.",
+            text=f"✅ **{user_mention}** đã đặt hẹn giờ **{display_text}**!\nBot sẽ nhắc nhở khi đến giờ.",
             parse_mode="Markdown"
         )
 
@@ -110,9 +110,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in active_reminders:
         active_reminders[chat_id].cancel()
 
-    await query.answer("Đã đặt hẹn giờ thành công!")
+    await query.answer("Đã ghi nhận!")
     await query.edit_message_text(
-        text=f"✅ **{user_mention}** đã chọn hẹn giờ **{display_text}**.\n⏳ *Đang tiến hành đếm ngược...*",
+        text=f"✅ **{user_mention}** đã chọn **{display_text}**!\n⏳ Hệ thống đang đếm ngược...",
         parse_mode="Markdown"
     )
 
@@ -125,12 +125,12 @@ async def reminder_countdown(chat_id: int, minutes: int, target_user_id: int, us
         await asyncio.sleep(minutes * 60)
         
         while True:
-            keyboard = [[InlineKeyboardButton("🚨 BẤM VÀO ĐÂY ĐỂ XÁC NHẬN OK", callback_data=f"ok_{target_user_id}")]]
+            keyboard = [[InlineKeyboardButton("🚨 OK (XÁC NHẬN ĐÁNH THẺ)", callback_data=f"ok_{target_user_id}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"⏰ {user_mention} **ĐÃ ĐẾN GIỜ ĐÁNH THẺ / CLOCK OUT!**\nVui lòng bấm nút xác nhận bên dưới.",
+                text=f"⏰ {user_mention} **ĐÃ ĐẾN GIỜ ĐÁNH THẺ / CLOCK OUT!**\nVui lòng bấm nút OK bên dưới để xác nhận.",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
@@ -158,7 +158,7 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         del active_reminders[chat_id]
         
     await query.edit_message_text(
-        text=f"✅ **{user.full_name} đã đánh thẻ thành công!** Tuyệt vời.",
+        text=f"👍 **{user.full_name} đã đánh thẻ thành công!** Đã tắt nhắc nhở.",
         parse_mode="Markdown"
     )
 
@@ -175,5 +175,5 @@ def main():
     print("Bot đang chạy...")
     application.run_polling()
 
-if __name__ == 'main__':
+if __name__ == '__main__':
     main()
