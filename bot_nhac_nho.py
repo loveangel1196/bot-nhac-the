@@ -36,7 +36,7 @@ TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
 # Nếu không dùng biến môi trường trên Koyeb, bạn dán token mới vào chuỗi dưới:
 if not TOKEN:
-    TOKEN = "DIEN_TOKEN_BOTFATHER_MOI_VAO_DAY"
+    TOKEN = "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA"
 
 # Đường dẫn GitHub Pages chứa file index.html
 WEB_APP_URL = "https://loveangel1196.github.io/bot-nhac-the/"
