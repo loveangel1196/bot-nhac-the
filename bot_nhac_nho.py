@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Thay bằng Token mới từ BotFather (hoặc đặt biến môi trường BOT_TOKEN)
-TOKEN = os.getenv("BOT_TOKEN", "DÁN_TOKEN_MỚI_VÀO_ĐÂY")
+TOKEN = os.getenv("BOT_TOKEN", "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA")
 
 TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 active_reminders = {}
