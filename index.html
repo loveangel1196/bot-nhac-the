@@ -2,89 +2,90 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bảng Đánh Thẻ</title>
-    <!-- Thư viện Telegram Web App SDK chính thức -->
+    <!-- SDK Web App chính thức của Telegram -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --bg-color: var(--tg-theme-bg-color, #18191c);
-            --text-color: var(--tg-theme-text-color, #ffffff);
-            --hint-color: var(--tg-theme-hint-color, #8e8e93);
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--tg-theme-bg-color, #17212b);
+            color: var(--tg-theme-text-color, #ffffff);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 90vh;
-            margin: 0;
+            min-height: 100vh;
             padding: 16px;
-            box-sizing: border-box;
             user-select: none;
         }
-        h3 {
-            margin: 0 0 8px 0;
-            font-size: 20px;
-            text-align: center;
-        }
-        p {
-            margin: 0 0 24px 0;
-            font-size: 14px;
-            color: var(--hint-color);
-            text-align: center;
-        }
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
+        .container {
             width: 100%;
-            max-width: 360px;
-        }
-        .btn {
+            max-width: 400px;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 18px 8px;
+            gap: 12px;
+        }
+        .title {
+            text-align: center;
             font-size: 16px;
             font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--tg-theme-hint-color, #7f8c8d);
+        }
+        /* Hàng trên chia đều 3 cột */
+        .grid-top {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        .btn {
             border: none;
-            border-radius: 12px;
+            border-radius: 8px;
             color: #ffffff;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 16px 8px;
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-            transition: transform 0.1s ease, opacity 0.2s ease;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.25);
+            transition: transform 0.1s ease, filter 0.15s ease;
         }
         .btn:active {
             transform: scale(0.96);
-            opacity: 0.85;
+            filter: brightness(0.85);
         }
-        .btn-time {
-            background: linear-gradient(135deg, #10b981, #059669); /* Xanh ngọc lục bảo */
+        /* Nút Xanh lá cây */
+        .btn-green {
+            background: linear-gradient(180deg, #4caf50 0%, #388e3c 100%);
         }
-        .btn-stop {
-            background: linear-gradient(135deg, #ef4444, #b91c1c); /* Đỏ nổi bật */
-            grid-column: span 3;
-            padding: 16px;
-            margin-top: 6px;
-            font-size: 16px;
+        /* Nút Đỏ to toàn hàng ở dưới */
+        .btn-red {
+            background: linear-gradient(180deg, #ef5350 0%, #d32f2f 100%);
+            width: 100%;
+            padding: 18px;
+            font-size: 17px;
         }
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="title">Vui lòng bấm chọn mốc thời gian đánh thẻ</div>
+        
+        <!-- Hàng 1: 3 nút Xanh lá -->
+        <div class="grid-top">
+            <button class="btn btn-green" onclick="sendChoice(10)">10 Phút</button>
+            <button class="btn btn-green" onclick="sendChoice(20)">20 Phút</button>
+            <button class="btn btn-green" onclick="sendChoice(30)">30 Phút</button>
+        </div>
 
-    <h3>Bảng Điều Khiển Đánh Thẻ</h3>
-    <p>Chọn mốc thời gian bạn muốn hẹn giờ nhắc nhở</p>
-
-    <div class="grid-container">
-        <button class="btn btn-time" onclick="chooseTime(10)">⏱ 10 Phút</button>
-        <button class="btn btn-time" onclick="chooseTime(20)">⏱ 20 Phút</button>
-        <button class="btn btn-time" onclick="chooseTime(30)">⏱ 30 Phút</button>
-        <button class="btn btn-stop" onclick="chooseTime('dung')">🛑 Dừng nhắc nhở</button>
+        <!-- Hàng 2: 1 nút Đỏ trải dài -->
+        <button class="btn btn-red" onclick="sendChoice('dung')">🛑 Dừng nhắc nhở</button>
     </div>
 
     <script>
@@ -92,13 +93,13 @@
         tg.ready();
         tg.expand();
 
-        function chooseTime(value) {
-            // Rung phản hồi thao tác trên điện thoại
+        function sendChoice(val) {
+            // Rung phản hồi khi bấm nút trên điện thoại
             if (tg.HapticFeedback) {
                 tg.HapticFeedback.impactOccurred('medium');
             }
-            // Gửi dữ liệu về bot và đóng Web App
-            tg.sendData(value.toString());
+            // Gửi dữ liệu về bot Python
+            tg.sendData(val.toString());
             tg.close();
         }
     </script>
