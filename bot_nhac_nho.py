@@ -24,21 +24,20 @@ from telegram.ext import (
     filters,
 )
 
-# Cấu hình logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Lấy Token từ biến môi trường của Koyeb hoặc điền trực tiếp
+# Lấy Token từ Koyeb Variables, nếu không có sẽ lấy chuỗi dự phòng
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
-# Nếu không dùng biến môi trường trên Koyeb, bạn dán token mới vào chuỗi dưới:
+# NẾU BẠN CHƯA CÀI TRONG TAB VARIABLES, HÃY DÁN TOKEN THẬT VÀO GIỮA CẶP NGOẶC DƯỚI ĐÂY:
 if not TOKEN:
-    TOKEN = "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA"
+    TOKEN = "DÁN_TOKEN_THẬT_CỦA_BẠN_VÀO_ĐÂY"
 
-# Đường dẫn GitHub Pages chứa file index.html
+# Link GitHub Pages chứa file index.html của bạn
 WEB_APP_URL = "https://loveangel1196.github.io/bot-nhac-the/"
 
 try:
@@ -55,11 +54,11 @@ def get_user_mention(user):
     return f'<a href="tg://user?id={user.id}">{safe_name}</a>'
 
 
-def get_keyboard():
-    """Bàn phím ghim cố định ở đáy khung chat để mở index.html"""
+def get_bottom_keyboard():
+    """Tạo bàn phím cố định: bấm nút to ở dưới sẽ mở thẳng giao diện index.html"""
     keyboard = [
         [
-            KeyboardButton("🎨 Mở Bảng Đánh Thẻ (HTML)", web_app=WebAppInfo(url=WEB_APP_URL))
+            KeyboardButton("🎨 MỞ BẢNG CHỌN GIỜ (MINI APP)", web_app=WebAppInfo(url=WEB_APP_URL))
         ],
         [
             KeyboardButton("🛑 Dừng nhắc nhở")
@@ -69,20 +68,20 @@ def get_keyboard():
         keyboard=keyboard,
         resize_keyboard=True,
         is_persistent=True,
-        input_field_placeholder="Bấm mở Bảng Đánh Thẻ hoặc gõ số phút..."
+        input_field_placeholder="Bấm mở Bảng Chọn Giờ hoặc gõ số phút..."
     )
 
 
 async def send_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "👋 <b>Bot Nhắc Đánh Thẻ / Chấm Công</b>\n\n"
-        "• Bấm nút <b>🎨 Mở Bảng Đánh Thẻ (HTML)</b> bên dưới để mở giao diện chọn mốc thời gian.\n"
+        "• Bấm nút <b>🎨 MỞ BẢNG CHỌN GIỜ (MINI APP)</b> ở dưới để mở bảng giao diện HTML.\n"
         "• Hoặc bạn có thể gõ nhanh: <b>10</b>, <b>20</b>, <b>30</b> hoặc <b>dừng</b>."
     )
     await context.bot.send_message(
         chat_id=chat_id,
         text=text,
-        reply_markup=get_keyboard(),
+        reply_markup=get_bottom_keyboard(),
         parse_mode="HTML"
     )
 
@@ -135,7 +134,7 @@ async def start_reminder_timer(chat_id: int, user, minutes: int, context: Contex
 
 
 async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý dữ liệu từ file index.html hoặc tin nhắn chữ"""
+    """Bắt dữ liệu do file index.html gửi về (tg.sendData) hoặc tin nhắn chữ"""
     if not update.message:
         return
 
@@ -144,10 +143,11 @@ async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_
     mention = get_user_mention(user)
 
     raw_data = ""
-    # Nhận dữ liệu gửi từ file index.html (qua tg.sendData)
+    # 1. Nhận dữ liệu khi người dùng chọn nút trong index.html
     if update.message.web_app_data:
         raw_data = update.message.web_app_data.data.strip()
-        logger.info(f"Dữ liệu nhận từ index.html: {raw_data}")
+        logger.info(f"Dữ liệu từ index.html: {raw_data}")
+    # 2. Hoặc người dùng gõ phím / bấm nút dừng
     elif update.message.text:
         raw_data = update.message.text.strip()
 
@@ -157,7 +157,7 @@ async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_
     lower_text = raw_data.lower()
 
     # Bắt lệnh Dừng
-    if any(w in lower_text for w in ["dung", "dừng", "stop", "hủy", "huy", "🛑"]):
+    if any(w in lower_text for w in ["dung", "dừng", "stop", "hủy", "huy", "🛑", "🔴"]):
         if not re.search(r'\b(10|20|30)\b', lower_text):
             canceled = await cancel_reminder(chat_id, user.id)
             if canceled:
@@ -166,7 +166,7 @@ async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_
                 await update.message.reply_text(f"⚠️ {mention} hiện không có lịch nhắc nào đang chạy.", parse_mode="HTML")
             return
 
-    # Bắt mốc 10, 20, 30 phút
+    # Bắt mốc thời gian 10, 20, 30
     match = re.search(r'\b(10|20|30)\b', lower_text)
     if match:
         minutes = int(match.group(1))
@@ -205,7 +205,6 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     target_user_id_str = data.split("_")[1]
 
-    # Kiểm tra quyền: chỉ người đặt lịch mới có thể bấm tắt
     if str(user.id) != target_user_id_str:
         await query.answer("⚠️ Bạn không phải người đặt lịch này nên không thể bấm tắt!", show_alert=True)
         return
@@ -223,8 +222,7 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 def main():
     if not TOKEN or TOKEN == "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA":
-        logger.error("CHƯA CẤU HÌNH BOT_TOKEN! Vui lòng kiểm tra lại token.")
-        return
+        raise ValueError("Chưa điền Token Telegram! Hãy vào tab Variables trên Koyeb thêm BOT_TOKEN.")
 
     application = ApplicationBuilder().token(TOKEN).build()
 
@@ -233,7 +231,7 @@ def main():
     application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^ok_"))
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_message))
 
-    logger.info("Bot đang khởi động...")
+    logger.info("Bot đang kết nối Telegram...")
     application.run_polling()
 
 
