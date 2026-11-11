@@ -49,12 +49,7 @@ def get_user_mention(user):
 
 
 def make_styled_button(text: str, style_type: str = "secondary") -> KeyboardButton:
-    """
-    Tạo nút bấm kèm đầy đủ các trường thuộc tính màu (style, color, bg_color).
-    - style_type='success' -> Xanh lá (#4CAF50)
-    - style_type='danger'  -> Đỏ (#E53935)
-    - style_type='primary' -> Xanh dương (#2196F3)
-    """
+    """Tạo nút bấm kèm đầy đủ các trường thuộc tính màu"""
     color_map = {
         "success": {"color": "green", "bg_color": "#4CAF50"},
         "danger":  {"color": "red",   "bg_color": "#E53935"},
@@ -70,7 +65,7 @@ def make_styled_button(text: str, style_type: str = "secondary") -> KeyboardButt
 
 
 def get_keyboard():
-    """Tạo bàn phím 4 nút với thuộc tính màu tương ứng"""
+    """Tạo bàn phím 4 nút với màu sắc tương ứng"""
     keyboard = [
         # Hàng 1: 3 nút Xanh lá
         [
@@ -134,7 +129,7 @@ async def start_reminder_timer(chat_id: int, user, minutes: int, context: Contex
     key = (chat_id, user.id)
     mention = get_user_mention(user)
 
-    # 1. Chặn tạo lịch mới nếu đang có lịch chưa hoàn thành
+    # Chặn tạo lịch mới nếu đang có lịch chưa hoàn thành
     if key in active_reminders:
         existing = active_reminders[key]
         time_str = existing.get("time_str", "sắp tới")
@@ -146,7 +141,7 @@ async def start_reminder_timer(chat_id: int, user, minutes: int, context: Contex
         )
         return
 
-    # 2. Tạo lịch hẹn mới độc lập cho cá nhân này
+    # Tạo lịch hẹn độc lập cho người dùng này
     wait_minutes = max(1, minutes - 1)  # Trừ hao nhắc trước 1 phút
     now_vn = datetime.now(TIMEZONE)
     reminder_time = now_vn + timedelta(minutes=wait_minutes)
@@ -169,7 +164,7 @@ async def start_reminder_timer(chat_id: int, user, minutes: int, context: Contex
 
 
 async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Bắt và bóc tách dữ liệu tin nhắn hoặc nút bấm"""
+    """Bắt dữ liệu từ tin nhắn hoặc nút bấm"""
     if not update.message or not update.message.text:
         return
 
@@ -204,8 +199,8 @@ async def reminder_countdown(chat_id: int, wait_minutes: int, target_user_id: in
         keyboard = [[InlineKeyboardButton("🚨 OK (XÁC NHẬN ĐÁNH THẺ)", callback_data=f"ok_{target_user_id}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Lặp lại nhắc nhở sau mỗi 15 giây (tối đa 15 lần)
-        for _ in range(15):
+        # Lặp lại thông báo mỗi 5 giây cho đến khi người dùng bấm nút OK hoặc Dừng
+        while True:
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=(
@@ -215,10 +210,10 @@ async def reminder_countdown(chat_id: int, wait_minutes: int, target_user_id: in
                 reply_markup=reply_markup,
                 parse_mode="HTML"
             )
-            await asyncio.sleep(15)
+            await asyncio.sleep(5)
 
     except asyncio.CancelledError:
-        logger.info(f"Đã hủy lịch nhắc cho user {target_user_id}")
+        logger.info(f"Lịch nhắc cho user {target_user_id} đã được hủy.")
     except Exception as e:
         logger.error(f"Lỗi gửi tin trong countdown: {e}")
     finally:
@@ -233,7 +228,7 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     target_user_id_str = data.split("_")[1]
 
-    # Kiểm tra chỉ người đặt lịch mới được tắt
+    # Kiểm tra chỉ người đặt lịch mới có quyền bấm tắt
     if str(user.id) != target_user_id_str:
         await query.answer("⚠️ Bạn không phải người đặt lịch này nên không thể bấm tắt!", show_alert=True)
         return
