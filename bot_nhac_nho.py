@@ -54,70 +54,70 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(1)
             await send_menu(chat_id, context)
 
-async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_message or not update.effective_message.web_app_data:
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Xử lý chung cho cả Web App Data và tin nhắn chữ"""
+    if not update.message:
         return
-        
-    data = update.effective_message.web_app_data.data.strip().lower()
+
     chat_id = update.effective_chat.id
     user = update.effective_user
     user_id = user.id
     user_mention = get_user_mention(user)
 
-    if data == "dung":
-        if chat_id in active_reminders:
-            active_reminders[chat_id]['task'].cancel()
-            del active_reminders[chat_id]
-            await update.message.reply_text(
-                text=f"🛑 **{user_mention}** đã hủy lịch nhắc nhở thành công!",
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text("⚠️ Hiện tại nhóm không có lịch nhắc nào đang chạy.")
-        return
-
-    minutes_map = {
-        "10": (9, 10),
-        "20": (19, 20),
-        "30": (29, 30)
-    }
-
-    if data in minutes_map:
-        wait_minutes, original_minutes = minutes_map[data]
+    # 1. Kiểm tra nếu gửi dữ liệu từ Web App lên
+    if update.message.web_app_data:
+        data = update.message.web_app_data.data.strip().lower()
         
-        if chat_id in active_reminders:
-            active_reminders[chat_id]['task'].cancel()
+        if data == "dung":
+            if chat_id in active_reminders:
+                active_reminders[chat_id]['task'].cancel()
+                del active_reminders[chat_id]
+                await update.message.reply_text(
+                    text=f"🛑 **{user_mention}** đã hủy lịch nhắc nhở thành công!",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text("⚠️ Hiện tại nhóm không có lịch nhắc nào đang chạy.")
+            return
 
-        now_vn = datetime.now(TIMEZONE)
-        reminder_time = now_vn + timedelta(minutes=wait_minutes)
-        time_str = reminder_time.strftime("%H:%M:%S")
+        minutes_map = {
+            "10": (9, 10),
+            "20": (19, 20),
+            "30": (29, 30)
+        }
 
-        await update.message.reply_text(
-            text=f"✅ {user_mention} đã đặt hẹn thành công **{original_minutes} phút**.\nBot sẽ nhắc nhở vào lúc: **{time_str}**",
-            parse_mode="Markdown"
-        )
+        if data in minutes_map:
+            wait_minutes, original_minutes = minutes_map[data]
+            
+            if chat_id in active_reminders:
+                active_reminders[chat_id]['task'].cancel()
 
-        task = context.application.create_task(reminder_countdown(chat_id, wait_minutes, user_id, user_mention, context))
-        active_reminders[chat_id] = {'task': task, 'user_id': user_id}
+            now_vn = datetime.now(TIMEZONE)
+            reminder_time = now_vn + timedelta(minutes=wait_minutes)
+            time_str = reminder_time.strftime("%H:%M:%S")
 
-async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-    text = update.message.text.strip().lower()
-    chat_id = update.effective_chat.id
-    user = update.effective_user
-    user_mention = get_user_mention(user)
-
-    if text in ["dừng", "dung"]:
-        if chat_id in active_reminders:
-            active_reminders[chat_id]['task'].cancel()
-            del active_reminders[chat_id]
             await update.message.reply_text(
-                text=f"🛑 **{user_mention}** đã hủy lịch nhắc nhở thành công!",
+                text=f"✅ {user_mention} đã đặt hẹn thành công **{original_minutes} phút**.\nBot sẽ nhắc nhở vào lúc: **{time_str}**",
                 parse_mode="Markdown"
             )
-        else:
-            await update.message.reply_text("⚠️ Hiện tại nhóm không có lịch nhắc nào đang chạy.")
+
+            task = context.application.create_task(reminder_countdown(chat_id, wait_minutes, user_id, user_mention, context))
+            active_reminders[chat_id] = {'task': task, 'user_id': user_id}
+        return
+
+    # 2. Kiểm tra nếu người dùng gõ chữ 'dừng'
+    if update.message.text:
+        text = update.message.text.strip().lower()
+        if text in ["dừng", "dung"]:
+            if chat_id in active_reminders:
+                active_reminders[chat_id]['task'].cancel()
+                del active_reminders[chat_id]
+                await update.message.reply_text(
+                    text=f"🛑 **{user_mention}** đã hủy lịch nhắc nhở thành công!",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text("⚠️ Hiện tại nhóm không có lịch nhắc nào đang chạy.")
 
 async def reminder_countdown(chat_id: int, wait_minutes: int, target_user_id: int, user_mention: str, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -165,9 +165,8 @@ def main():
 
     application.add_handler(CommandHandler(["start", "menu"], start))
     application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
-    # Sửa lại bộ lọc chuẩn theo python-telegram-bot v20+
-    application.add_handler(MessageHandler(filters.status_update.WEB_APP_DATA, handle_web_app_data))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    # Dùng bộ lọc chung tuyệt đối an toàn, loại bỏ mọi lỗi attribute cũ
+    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^ok_"))
 
     print("Bot đang chạy...")
