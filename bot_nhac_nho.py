@@ -11,6 +11,7 @@ from telegram import (
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
     KeyboardButton,
+    WebAppInfo,
     ChatMember,
 )
 from telegram.ext import (
@@ -23,63 +24,70 @@ from telegram.ext import (
     filters,
 )
 
-# Cấu hình logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Điền Token mới từ BotFather vào đây
+# Token mới từ @BotFather
 TOKEN = os.getenv("BOT_TOKEN", "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA")
 
-# Thiết lập múi giờ Việt Nam an toàn
+# Link GitHub Pages trỏ trực tiếp đến file index.html
+WEB_APP_URL = "https://loveangel1196.github.io/bot-nhac-the/"
+
 try:
     TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 except Exception:
     from datetime import timezone
     TIMEZONE = timezone(timedelta(hours=7))
 
-# Lưu trữ tiến trình hẹn giờ theo cặp (chat_id, user_id)
 active_reminders = {}
 
 
 def get_user_mention(user):
-    """Bọc html.escape để chống lỗi ký tự lạ khi tag tên người dùng"""
     safe_name = html.escape(user.full_name)
     return f'<a href="tg://user?id={user.id}">{safe_name}</a>'
 
 
-def get_bottom_keyboard():
-    """Giao diện 4 nút chuẩn: 3 nút Xanh bên trên, 1 nút Đỏ to trải dài bên dưới"""
+def get_webapp_inline_keyboard():
+    """Nút bấm mở WebApp đính kèm theo tin nhắn"""
     keyboard = [
-        [
-            KeyboardButton("🟢 10 Phút"),
-            KeyboardButton("🟢 20 Phút"),
-            KeyboardButton("🟢 30 Phút"),
-        ],
-        [
-            KeyboardButton("🔴 Dừng nhắc nhở")
-        ]
+        [InlineKeyboardButton("🎨 Mở Bảng Đánh Thẻ (Giao diện chuẩn)", web_app=WebAppInfo(url=WEB_APP_URL))]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_bottom_reply_keyboard():
+    """Nút bấm ghim cố định ở đáy khung chat để bật WebApp bất cứ lúc nào"""
+    keyboard = [
+        [KeyboardButton("🎨 Mở Bảng Đánh Thẻ (Mini App)", web_app=WebAppInfo(url=WEB_APP_URL))],
+        [KeyboardButton("🛑 Dừng nhắc nhở")]
     ]
     return ReplyKeyboardMarkup(
         keyboard=keyboard,
         resize_keyboard=True,
         is_persistent=True,
-        input_field_placeholder="Bấm chọn thời gian hoặc Dừng..."
+        input_field_placeholder="Bấm mở Bảng Đánh Thẻ hoặc gõ số phút..."
     )
 
 
 async def send_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "👋 <b>Bot Nhắc Đánh Thẻ / Chấm Công</b>\n\n"
-        "Vui lòng bấm chọn mốc thời gian bên dưới, hoặc gõ <b>10</b>, <b>20</b>, <b>30</b>, <b>dừng</b>:"
+        "Bấm vào nút bên dưới để mở bảng giao diện màu sắc chọn mốc thời gian:"
     )
     await context.bot.send_message(
         chat_id=chat_id,
         text=text,
-        reply_markup=get_bottom_keyboard(),
+        reply_markup=get_bottom_reply_keyboard(),
         parse_mode="HTML"
+    )
+    # Gửi kèm 1 tin nhắn Inline để người dùng tiện bấm ở cả 2 nơi
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="👇 Hoặc mở nhanh tại đây:",
+        reply_markup=get_webapp_inline_keyboard()
     )
 
 
@@ -97,7 +105,6 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cancel_reminder(chat_id: int, user_id: int):
-    """Hủy hẹn giờ của người dùng cụ thể"""
     key = (chat_id, user_id)
     if key in active_reminders:
         task = active_reminders[key].get("task")
@@ -109,7 +116,7 @@ async def cancel_reminder(chat_id: int, user_id: int):
 
 
 async def start_reminder_timer(chat_id: int, user, minutes: int, context: ContextTypes.DEFAULT_TYPE, message_obj):
-    wait_minutes = max(1, minutes - 1)  # Trừ hao nhắc trước 1 phút
+    wait_minutes = max(1, minutes - 1)  # Trừ hao 1 phút nhắc trước
     key = (chat_id, user.id)
 
     await cancel_reminder(chat_id, user.id)
@@ -132,7 +139,7 @@ async def start_reminder_timer(chat_id: int, user, minutes: int, context: Contex
 
 
 async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Bắt và bóc tách dữ liệu từ mọi nguồn: nút bấm bàn phím, web app, gõ tay"""
+    """Bắt trực tiếp dữ liệu từ file index.html qua web_app_data và tin nhắn chữ"""
     if not update.message:
         return
 
@@ -140,39 +147,35 @@ async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_
     user = update.effective_user
     mention = get_user_mention(user)
 
-    raw_text = ""
+    raw_data = ""
+    # 1. Dữ liệu gửi từ giao diện index.html (tg.sendData)
     if update.message.web_app_data:
-        raw_text = update.message.web_app_data.data.strip()
+        raw_data = update.message.web_app_data.data.strip()
+        logger.info(f"Dữ liệu nhận từ index.html: {raw_data}")
+    # 2. Người dùng bấm phím hoặc gõ tay
     elif update.message.text:
-        raw_text = update.message.text.strip()
+        raw_data = update.message.text.strip()
 
-    if not raw_text:
+    if not raw_data:
         return
 
-    lower_text = raw_text.lower()
-    logger.info(f"Nhận tin nhắn: {raw_text} từ {user.id}")
+    lower_text = raw_data.lower()
 
-    try:
-        # 1. Bắt lệnh Dừng (dù có emoji 🔴, 🛑 hay gõ chữ dừng, stop, hủy)
-        if any(w in lower_text for w in ["dừng", "dung", "stop", "hủy", "huy", "🔴", "🛑"]):
-            if not re.search(r'\b(10|20|30)\b', lower_text):
-                canceled = await cancel_reminder(chat_id, user.id)
-                if canceled:
-                    await update.message.reply_text(f"🛑 {mention} đã hủy lịch nhắc nhở thành công!", parse_mode="HTML")
-                else:
-                    await update.message.reply_text(f"⚠️ {mention} hiện không có lịch nhắc nào đang chạy.", parse_mode="HTML")
-                return
-
-        # 2. Bắt các số phút 10, 20 hoặc 30 (bắt trúng kể cả '🟢 10 Phút', '10', '10p', '10 phút')
-        match = re.search(r'\b(10|20|30)\b', lower_text)
-        if match:
-            minutes = int(match.group(1))
-            await start_reminder_timer(chat_id, user, minutes, context, update.message)
+    # Bắt lệnh Dừng
+    if any(w in lower_text for w in ["dung", "dừng", "stop", "hủy", "huy", "🛑"]):
+        if not re.search(r'\b(10|20|30)\b', lower_text):
+            canceled = await cancel_reminder(chat_id, user.id)
+            if canceled:
+                await update.message.reply_text(f"🛑 {mention} đã hủy lịch nhắc nhở thành công!", parse_mode="HTML")
+            else:
+                await update.message.reply_text(f"⚠️ {mention} hiện không có lịch nhắc nào đang chạy.", parse_mode="HTML")
             return
 
-    except Exception as e:
-        logger.error(f"Lỗi khi xử lý tin nhắn: {e}", exc_info=True)
-        await update.message.reply_text(f"⚠️ Lỗi hệ thống: {e}")
+    # Bắt các mốc 10, 20, 30 phút từ nút bấm web app
+    match = re.search(r'\b(10|20|30)\b', lower_text)
+    if match:
+        minutes = int(match.group(1))
+        await start_reminder_timer(chat_id, user, minutes, context, update.message)
 
 
 async def reminder_countdown(chat_id: int, wait_minutes: int, target_user_id: int, user_mention: str, context: ContextTypes.DEFAULT_TYPE):
@@ -182,7 +185,6 @@ async def reminder_countdown(chat_id: int, wait_minutes: int, target_user_id: in
         keyboard = [[InlineKeyboardButton("🚨 OK (XÁC NHẬN ĐÁNH THẺ)", callback_data=f"ok_{target_user_id}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Gửi nhắc nhở lặp lại sau mỗi 15 giây (tối đa 15 lần để không vi phạm rate-limit)
         for _ in range(15):
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -196,7 +198,7 @@ async def reminder_countdown(chat_id: int, wait_minutes: int, target_user_id: in
             await asyncio.sleep(15)
 
     except asyncio.CancelledError:
-        logger.info(f"Lịch nhắc của user {target_user_id} đã được hủy.")
+        logger.info(f"Đã hủy lịch nhắc cho user {target_user_id}")
     except Exception as e:
         logger.error(f"Lỗi gửi tin trong countdown: {e}")
 
@@ -208,38 +210,5 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     target_user_id_str = data.split("_")[1]
 
-    # Kiểm tra chỉ người đặt lịch mới có quyền bấm tắt
     if str(user.id) != target_user_id_str:
-        await query.answer("⚠️ Bạn không phải người đặt lịch này nên không thể bấm tắt!", show_alert=True)
-        return
-
-    await query.answer()
-    chat_id = query.message.chat_id
-    await cancel_reminder(chat_id, user.id)
-
-    mention = get_user_mention(user)
-    await query.edit_message_text(
-        text=f"👍 <b>{mention} đã đánh thẻ thành công!</b> Đã tắt nhắc nhở.",
-        parse_mode="HTML"
-    )
-
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    logger.error("Đã xảy ra ngoại lệ:", exc_info=context.error)
-
-
-def main():
-    application = ApplicationBuilder().token(TOKEN).build()
-
-    application.add_handler(CommandHandler(["start", "menu"], start))
-    application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
-    application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^ok_"))
-    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_message))
-    application.add_error_handler(error_handler)
-
-    print("Bot đang chạy...")
-    application.run_polling()
-
-
-if __name__ == "__main__":
-    main()
+        await query.answer("⚠️ Bạn không phải người đặt lịch này nên không thể bấm tắt!", show_alert=True
