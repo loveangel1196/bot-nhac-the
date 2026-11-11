@@ -165,7 +165,8 @@ def main():
 
     application.add_handler(CommandHandler(["start", "menu"], start))
     application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
-    application.add_handler(MessageHandler(filters.WEB_APP_DATA, handle_web_app_data))
+    # Sửa lại bộ lọc chuẩn theo python-telegram-bot v20+
+    application.add_handler(MessageHandler(filters.status_update.WEB_APP_DATA, handle_web_app_data))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^ok_"))
 
