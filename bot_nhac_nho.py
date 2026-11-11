@@ -30,14 +30,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Lấy Token từ Koyeb Variables, nếu không có sẽ lấy chuỗi dự phòng
-TOKEN = os.getenv("BOT_TOKEN", "").strip()
+# DÁN TRỰC TIẾP TOKEN MỚI (LẤY TỪ @BotFather) VÀO GIỮA 2 DẤU NGOẶC DƯỚI ĐÂY:
+TOKEN = os.getenv("BOT_TOKEN", "").strip() or "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA"
 
-# NẾU BẠN CHƯA CÀI TRONG TAB VARIABLES, HÃY DÁN TOKEN THẬT VÀO GIỮA CẶP NGOẶC DƯỚI ĐÂY:
-if not TOKEN:
-    TOKEN = "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA"
-
-# Link GitHub Pages chứa file index.html của bạn
+# Link GitHub Pages chứa file index.html
 WEB_APP_URL = "https://loveangel1196.github.io/bot-nhac-the/"
 
 try:
@@ -55,7 +51,7 @@ def get_user_mention(user):
 
 
 def get_bottom_keyboard():
-    """Tạo bàn phím cố định: bấm nút to ở dưới sẽ mở thẳng giao diện index.html"""
+    """Tạo bàn phím cố định ở chân khung chat để mở index.html"""
     keyboard = [
         [
             KeyboardButton("🎨 MỞ BẢNG CHỌN GIỜ (MINI APP)", web_app=WebAppInfo(url=WEB_APP_URL))
@@ -75,7 +71,7 @@ def get_bottom_keyboard():
 async def send_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "👋 <b>Bot Nhắc Đánh Thẻ / Chấm Công</b>\n\n"
-        "• Bấm nút <b>🎨 MỞ BẢNG CHỌN GIỜ (MINI APP)</b> ở dưới để mở bảng giao diện HTML.\n"
+        "• Bấm nút <b>🎨 MỞ BẢNG CHỌN GIỜ (MINI APP)</b> ở dưới để mở bảng giao diện màu sắc.\n"
         "• Hoặc bạn có thể gõ nhanh: <b>10</b>, <b>20</b>, <b>30</b> hoặc <b>dừng</b>."
     )
     await context.bot.send_message(
@@ -134,7 +130,7 @@ async def start_reminder_timer(chat_id: int, user, minutes: int, context: Contex
 
 
 async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Bắt dữ liệu do file index.html gửi về (tg.sendData) hoặc tin nhắn chữ"""
+    """Bắt dữ liệu trả về từ file index.html qua WebApp hoặc tin nhắn chữ"""
     if not update.message:
         return
 
@@ -143,11 +139,10 @@ async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_
     mention = get_user_mention(user)
 
     raw_data = ""
-    # 1. Nhận dữ liệu khi người dùng chọn nút trong index.html
+    # Dữ liệu từ nút bấm trong file index.html
     if update.message.web_app_data:
         raw_data = update.message.web_app_data.data.strip()
-        logger.info(f"Dữ liệu từ index.html: {raw_data}")
-    # 2. Hoặc người dùng gõ phím / bấm nút dừng
+        logger.info(f"Nhận dữ liệu từ index.html: {raw_data}")
     elif update.message.text:
         raw_data = update.message.text.strip()
 
@@ -221,9 +216,6 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 def main():
-    if not TOKEN or TOKEN == "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA":
-        raise ValueError("Chưa điền Token Telegram! Hãy vào tab Variables trên Koyeb thêm BOT_TOKEN.")
-
     application = ApplicationBuilder().token(TOKEN).build()
 
     application.add_handler(CommandHandler(["start", "menu"], start))
