@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMember
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, ChatMemberHandler
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, ChatMemberHandler, MessageHandler, filters
 
 # Cấu hình logging
 logging.basicConfig(
@@ -28,7 +28,7 @@ async def send_menu(chat_id, context):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await context.bot.send_message(
         chat_id=chat_id,
-        text="👋 **Nhắc đánh thẻ Bot**\nVui lòng chọn thời gian nhắc nhở:",
+        text="👋 **Nhắc đánh thẻ Bot**\nVui lòng chọn thời gian nhắc nhở hoặc nhắn trực tiếp số phút (`10`, `20`, `30`):",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -44,22 +44,60 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_member = result.new_chat_member
         if new_member.user.id == context.bot.id and new_member.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR]:
             chat_id = update.effective_chat.id
-            # Chờ 1 giây để đảm bảo nhóm đã sẵn sàng nhận tin nhắn từ bot
             await asyncio.sleep(1)
             await send_menu(chat_id, context)
 
+def get_user_mention(user):
+    """Lấy định dạng gọi tên chuẩn @username hoặc link profile"""
+    if user.username:
+        return f"@{user.username}"
+    else:
+        return f"[{user.full_name}](tg://user?id={user.id})"
+
+async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Xử lý khi người dùng nhắn trực tiếp số 10, 20 hoặc 30 lên nhóm"""
+    if not update.message or not update.message.text:
+        return
+        
+    text = update.message.text.strip()
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    user_id = user.id
+    user_mention = get_user_mention(user)
+    
+    minutes_map = {
+        "10": (9, "10 phút (nhắc sau 9 phút)"),
+        "20": (19, "20 phút (nhắc sau 19 phút)"),
+        "30": (29, "30 phút (nhắc sau 29 phút)")
+    }
+    
+    if text in minutes_map:
+        minutes, display_text = minutes_map[text]
+        
+        # Hủy lịch nhắc cũ của nhóm nếu có
+        if chat_id in active_reminders:
+            active_reminders[chat_id].cancel()
+
+        # Gửi tin nhắn xác nhận kèm nút OK chính chủ
+        keyboard = [[InlineKeyboardButton("OK (Đã đánh thẻ)", callback_data=f"ok_{user_id}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            text=f"✅ **{user_mention}** đã đặt hẹn giờ **{display_text}**!\nBot sẽ nhắc nhở khi đến giờ.",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+        # Chạy đồng hồ đếm ngược
+        task = context.application.create_task(reminder_countdown(chat_id, minutes, user_id, user_mention, context))
+        active_reminders[chat_id] = task
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý sự kiện bấm các nút thời gian"""
+    """Xử lý sự kiện khi bấm các nút thời gian"""
     query = update.callback_query
     user = query.from_user
     user_id = user.id
-    user_name = user.full_name
-    
-    # Tạo mention dạng @username nếu có, nếu không có username thì dùng link tên hiển thị
-    if user.username:
-        user_mention = f"@{user.username}"
-    else:
-        user_mention = f"[{user_name}](tg://user?id={user_id})"
+    user_mention = get_user_mention(user)
     
     chat_id = query.message.chat_id
     data = query.data
@@ -80,20 +118,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in active_reminders:
         active_reminders[chat_id].cancel()
 
-    await query.answer("Đã ghi nhận yêu cầu của bạn!")
+    await query.answer("Đã ghi nhận yêu cầu!")
     await query.edit_message_text(
         text=f"✅ **{user_mention}** đã đặt hẹn giờ **{display_text}**!",
         parse_mode="Markdown"
     )
 
-    # Chạy đồng hồ đếm ngược và lưu kèm thông tin user
+    # Chạy đồng hồ đếm ngược
     task = context.application.create_task(reminder_countdown(chat_id, minutes, user_id, user_mention, context))
     active_reminders[chat_id] = task
 
 async def reminder_countdown(chat_id: int, minutes: int, target_user_id: int, user_mention: str, context: ContextTypes.DEFAULT_TYPE):
-    """Đợi đủ thời gian rồi lặp lại thông báo mỗi 5 giây gọi tên người đó"""
+    """Đợi đủ thời gian rồi lặp lại thông báo mỗi 5 giây, tag thẳng tài khoản Telegram"""
     try:
-        # Chờ đợi số phút (đã trừ 1 phút)
         await asyncio.sleep(minutes * 60)
         
         while True:
@@ -111,12 +148,11 @@ async def reminder_countdown(chat_id: int, minutes: int, target_user_id: int, us
         logger.info(f"Đã hủy lịch nhắc cho chat_id: {chat_id}")
 
 async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý khi bấm nút OK (Kiểm tra đúng người bấm mới cho qua)"""
+    """Xử lý khi bấm nút OK (Chỉ đúng người được tag mới bấm được)"""
     query = update.callback_query
     user = query.from_user
     data = query.data
     
-    # Tách lấy user_id được phép bấm từ callback_data
     target_user_id_str = data.split("_")[1]
     
     if str(user.id) != target_user_id_str:
@@ -138,9 +174,10 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 def main():
     application = ApplicationBuilder().token(TOKEN).build()
 
-    # Đăng ký handlers
+    # Đăng ký các handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     application.add_handler(CallbackQueryHandler(button_callback, pattern="^time_"))
     application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^ok_"))
 
