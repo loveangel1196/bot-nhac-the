@@ -44,6 +44,8 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_member = result.new_chat_member
         if new_member.user.id == context.bot.id and new_member.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR]:
             chat_id = update.effective_chat.id
+            # Chờ 1 giây để đảm bảo nhóm đã sẵn sàng nhận tin nhắn từ bot
+            await asyncio.sleep(1)
             await send_menu(chat_id, context)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -52,6 +54,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
     user_id = user.id
     user_name = user.full_name
+    
+    # Tạo mention dạng @username nếu có, nếu không có username thì dùng link tên hiển thị
+    if user.username:
+        user_mention = f"@{user.username}"
+    else:
+        user_mention = f"[{user_name}](tg://user?id={user_id})"
     
     chat_id = query.message.chat_id
     data = query.data
@@ -72,17 +80,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in active_reminders:
         active_reminders[chat_id].cancel()
 
-    await query.answer(f"Đã ghi nhận yêu cầu của bạn!")
+    await query.answer("Đã ghi nhận yêu cầu của bạn!")
     await query.edit_message_text(
-        text=f"✅ **{user_name}** đã đặt hẹn giờ **{display_text}**!",
+        text=f"✅ **{user_mention}** đã đặt hẹn giờ **{display_text}**!",
         parse_mode="Markdown"
     )
 
-    # Chạy đồng hồ đếm ngược và lưu kèm user_id & user_name
-    task = context.application.create_task(reminder_countdown(chat_id, minutes, user_id, user_name, context))
+    # Chạy đồng hồ đếm ngược và lưu kèm thông tin user
+    task = context.application.create_task(reminder_countdown(chat_id, minutes, user_id, user_mention, context))
     active_reminders[chat_id] = task
 
-async def reminder_countdown(chat_id: int, minutes: int, target_user_id: int, target_user_name: str, context: ContextTypes.DEFAULT_TYPE):
+async def reminder_countdown(chat_id: int, minutes: int, target_user_id: int, user_mention: str, context: ContextTypes.DEFAULT_TYPE):
     """Đợi đủ thời gian rồi lặp lại thông báo mỗi 5 giây gọi tên người đó"""
     try:
         # Chờ đợi số phút (đã trừ 1 phút)
@@ -94,7 +102,7 @@ async def reminder_countdown(chat_id: int, minutes: int, target_user_id: int, ta
             
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"⏰ [{target_user_name}](tg://user?id={target_user_id}) **ĐÃ ĐẾN GIỜ ĐÁNH THẺ / CLOCK OUT!**\nVui lòng bấm nút OK bên dưới để xác nhận.",
+                text=f"⏰ {user_mention} **ĐÃ ĐẾN GIỜ ĐÁNH THẺ / CLOCK OUT!**\nVui lòng bấm nút OK bên dưới để xác nhận.",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
@@ -112,7 +120,6 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     target_user_id_str = data.split("_")[1]
     
     if str(user.id) != target_user_id_str:
-        # Nếu không phải là người đã bấm đặt lịch
         await query.answer("⚠️ Bạn không phải là người đặt lịch này nên không thể bấm OK!", show_alert=True)
         return
 
@@ -124,7 +131,7 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         del active_reminders[chat_id]
         
     await query.edit_message_text(
-        text=f"👍 **{user.full_name} đã xác nhận hoàn thành!** Đã tắt thông báo nhắc nhở.",
+        text=f"👍 **Đã xác nhận hoàn thành!** Đã tắt thông báo nhắc nhở.",
         parse_mode="Markdown"
     )
 
