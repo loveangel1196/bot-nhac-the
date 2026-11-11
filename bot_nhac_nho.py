@@ -24,16 +24,21 @@ from telegram.ext import (
     filters,
 )
 
+# Cấu hình logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Token mới từ @BotFather
-TOKEN = os.getenv("BOT_TOKEN", "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA")
+# Lấy Token từ biến môi trường của Koyeb hoặc điền trực tiếp
+TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
-# Link GitHub Pages trỏ trực tiếp đến file index.html
+# Nếu không dùng biến môi trường trên Koyeb, bạn dán token mới vào chuỗi dưới:
+if not TOKEN:
+    TOKEN = "DIEN_TOKEN_BOTFATHER_MOI_VAO_DAY"
+
+# Đường dẫn GitHub Pages chứa file index.html
 WEB_APP_URL = "https://loveangel1196.github.io/bot-nhac-the/"
 
 try:
@@ -50,19 +55,15 @@ def get_user_mention(user):
     return f'<a href="tg://user?id={user.id}">{safe_name}</a>'
 
 
-def get_webapp_inline_keyboard():
-    """Nút bấm mở WebApp đính kèm theo tin nhắn"""
+def get_keyboard():
+    """Bàn phím ghim cố định ở đáy khung chat để mở index.html"""
     keyboard = [
-        [InlineKeyboardButton("🎨 Mở Bảng Đánh Thẻ (Giao diện chuẩn)", web_app=WebAppInfo(url=WEB_APP_URL))]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_bottom_reply_keyboard():
-    """Nút bấm ghim cố định ở đáy khung chat để bật WebApp bất cứ lúc nào"""
-    keyboard = [
-        [KeyboardButton("🎨 Mở Bảng Đánh Thẻ (Mini App)", web_app=WebAppInfo(url=WEB_APP_URL))],
-        [KeyboardButton("🛑 Dừng nhắc nhở")]
+        [
+            KeyboardButton("🎨 Mở Bảng Đánh Thẻ (HTML)", web_app=WebAppInfo(url=WEB_APP_URL))
+        ],
+        [
+            KeyboardButton("🛑 Dừng nhắc nhở")
+        ]
     ]
     return ReplyKeyboardMarkup(
         keyboard=keyboard,
@@ -75,19 +76,14 @@ def get_bottom_reply_keyboard():
 async def send_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "👋 <b>Bot Nhắc Đánh Thẻ / Chấm Công</b>\n\n"
-        "Bấm vào nút bên dưới để mở bảng giao diện màu sắc chọn mốc thời gian:"
+        "• Bấm nút <b>🎨 Mở Bảng Đánh Thẻ (HTML)</b> bên dưới để mở giao diện chọn mốc thời gian.\n"
+        "• Hoặc bạn có thể gõ nhanh: <b>10</b>, <b>20</b>, <b>30</b> hoặc <b>dừng</b>."
     )
     await context.bot.send_message(
         chat_id=chat_id,
         text=text,
-        reply_markup=get_bottom_reply_keyboard(),
+        reply_markup=get_keyboard(),
         parse_mode="HTML"
-    )
-    # Gửi kèm 1 tin nhắn Inline để người dùng tiện bấm ở cả 2 nơi
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text="👇 Hoặc mở nhanh tại đây:",
-        reply_markup=get_webapp_inline_keyboard()
     )
 
 
@@ -116,7 +112,7 @@ async def cancel_reminder(chat_id: int, user_id: int):
 
 
 async def start_reminder_timer(chat_id: int, user, minutes: int, context: ContextTypes.DEFAULT_TYPE, message_obj):
-    wait_minutes = max(1, minutes - 1)  # Trừ hao 1 phút nhắc trước
+    wait_minutes = max(1, minutes - 1)  # Trừ hao nhắc trước 1 phút
     key = (chat_id, user.id)
 
     await cancel_reminder(chat_id, user.id)
@@ -139,7 +135,7 @@ async def start_reminder_timer(chat_id: int, user, minutes: int, context: Contex
 
 
 async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Bắt trực tiếp dữ liệu từ file index.html qua web_app_data và tin nhắn chữ"""
+    """Xử lý dữ liệu từ file index.html hoặc tin nhắn chữ"""
     if not update.message:
         return
 
@@ -148,11 +144,10 @@ async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_
     mention = get_user_mention(user)
 
     raw_data = ""
-    # 1. Dữ liệu gửi từ giao diện index.html (tg.sendData)
+    # Nhận dữ liệu gửi từ file index.html (qua tg.sendData)
     if update.message.web_app_data:
         raw_data = update.message.web_app_data.data.strip()
         logger.info(f"Dữ liệu nhận từ index.html: {raw_data}")
-    # 2. Người dùng bấm phím hoặc gõ tay
     elif update.message.text:
         raw_data = update.message.text.strip()
 
@@ -171,7 +166,7 @@ async def handle_incoming_message(update: Update, context: ContextTypes.DEFAULT_
                 await update.message.reply_text(f"⚠️ {mention} hiện không có lịch nhắc nào đang chạy.", parse_mode="HTML")
             return
 
-    # Bắt các mốc 10, 20, 30 phút từ nút bấm web app
+    # Bắt mốc 10, 20, 30 phút
     match = re.search(r'\b(10|20|30)\b', lower_text)
     if match:
         minutes = int(match.group(1))
@@ -210,5 +205,37 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     target_user_id_str = data.split("_")[1]
 
+    # Kiểm tra quyền: chỉ người đặt lịch mới có thể bấm tắt
     if str(user.id) != target_user_id_str:
-        await query.answer("⚠️ Bạn không phải người đặt lịch này nên không thể bấm tắt!", show_alert=True
+        await query.answer("⚠️ Bạn không phải người đặt lịch này nên không thể bấm tắt!", show_alert=True)
+        return
+
+    await query.answer()
+    chat_id = query.message.chat_id
+    await cancel_reminder(chat_id, user.id)
+
+    mention = get_user_mention(user)
+    await query.edit_message_text(
+        text=f"👍 <b>{mention} đã đánh thẻ thành công!</b> Đã tắt nhắc nhở.",
+        parse_mode="HTML"
+    )
+
+
+def main():
+    if not TOKEN or TOKEN == "9042194702:AAEGuKY5Mq0oaBX_IoEOB9xMsQENktxnhjA":
+        logger.error("CHƯA CẤU HÌNH BOT_TOKEN! Vui lòng kiểm tra lại token.")
+        return
+
+    application = ApplicationBuilder().token(TOKEN).build()
+
+    application.add_handler(CommandHandler(["start", "menu"], start))
+    application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+    application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^ok_"))
+    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_message))
+
+    logger.info("Bot đang khởi động...")
+    application.run_polling()
+
+
+if __name__ == "__main__":
+    main()
