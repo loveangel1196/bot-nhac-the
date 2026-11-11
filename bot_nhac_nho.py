@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 # Thay thế bằng Token thật do BotFather cấp
 TOKEN = "9042194702:AAEuNzFXtzz27GWq3MMDv9BOHZqhFVg4UxM"
 
-# Link Web App của bạn trên GitHub Pages (Thay link của bạn vào đây)
-WEB_APP_URL = "https://github.com/loveangel1196/bot-nhac-the.git"
+# Link Web App chính xác của bạn trên GitHub Pages (Đã sửa lại đúng định dạng)
+WEB_APP_URL = "https://loveangel1196.github.io/bot-nhac-the/"
 
 # Múi giờ Việt Nam (GMT+7)
 TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -179,7 +179,7 @@ def main():
     # Đăng ký handlers
     application.add_handler(CommandHandler(["start", "menu"], start))
     application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
-    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
+    application.add_handler(MessageHandler(filters.WEB_APP_DATA, handle_web_app_data))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^ok_"))
 
