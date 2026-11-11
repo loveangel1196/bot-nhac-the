@@ -1,1 +1,1 @@
-worker: python bot_nhac_nho.py
+worker: python3 bot_nhac_nho.py
