@@ -4,16 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bảng Đánh Thẻ</title>
-    <!-- Thư viện Telegram Web App SDK -->
+    <!-- Thư viện Telegram Web App chính thức -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            -webkit-tap-highlight-color: transparent;
         }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--tg-theme-bg-color, #17212b);
             color: var(--tg-theme-text-color, #ffffff);
             display: flex;
@@ -21,71 +23,87 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            padding: 16px;
+            padding: 20px 16px;
             user-select: none;
         }
-        .container {
+
+        .panel-container {
             width: 100%;
             max-width: 380px;
+            background-color: var(--tg-theme-secondary-bg-color, #232e3c);
+            border-radius: 16px;
+            padding: 20px 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
-        .title {
+
+        .header-title {
             text-align: center;
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--tg-theme-hint-color, #8e8e93);
+            margin-bottom: 6px;
+            color: var(--tg-theme-hint-color, #8e9ca8);
+            letter-spacing: 0.2px;
         }
-        /* Hàng trên chia đều 3 cột nút xanh */
+
+        /* Hàng trên: 3 nút chia đều */
         .grid-top {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 10px;
         }
+
         .btn {
             border: none;
             border-radius: 10px;
             color: #ffffff;
-            font-size: 15px;
-            font-weight: bold;
-            padding: 18px 6px;
+            font-size: 16px;
+            font-weight: 700;
             cursor: pointer;
             text-align: center;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-            transition: transform 0.1s ease, filter 0.15s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+            transition: transform 0.08s ease, filter 0.1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
+
         .btn:active {
             transform: scale(0.95);
-            filter: brightness(0.85);
+            filter: brightness(0.88);
         }
+
         /* Nút Xanh lá cây */
         .btn-green {
-            background: linear-gradient(180deg, #2ecc71 0%, #27ae60 100%);
+            background: linear-gradient(180deg, #4caf50 0%, #388e3c 100%);
+            padding: 18px 4px;
         }
-        /* Nút Đỏ to toàn hàng ở dưới */
+
+        /* Nút Đỏ to ngang hàng */
         .btn-red {
-            background: linear-gradient(180deg, #e74c3c 0%, #c0392b 100%);
+            background: linear-gradient(180deg, #e53935 0%, #c62828 100%);
             width: 100%;
-            padding: 18px;
+            padding: 16px 8px;
             font-size: 16px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="title">Bấm nút để đặt giờ hoặc dừng nhắc nhở:</div>
-        
-        <!-- Hàng trên: 3 nút Xanh lá -->
+
+    <div class="panel-container">
+        <div class="header-title">Chọn mốc thời gian đánh thẻ</div>
+
+        <!-- Hàng 1: 3 nút màu xanh lá -->
         <div class="grid-top">
-            <button class="btn btn-green" onclick="sendChoice('10')">10 Phút</button>
-            <button class="btn btn-green" onclick="sendChoice('20')">20 Phút</button>
-            <button class="btn btn-green" onclick="sendChoice('30')">30 Phút</button>
+            <button class="btn btn-green" onclick="sendAction('10')">10 Phút</button>
+            <button class="btn btn-green" onclick="sendAction('20')">20 Phút</button>
+            <button class="btn btn-green" onclick="sendAction('30')">30 Phút</button>
         </div>
 
-        <!-- Hàng dưới: 1 nút Đỏ to dài -->
-        <button class="btn btn-red" onclick="sendChoice('dung')">🛑 Dừng nhắc nhở</button>
+        <!-- Hàng 2: 1 nút màu đỏ trải dài -->
+        <button class="btn btn-red" onclick="sendAction('dung')">🛑 Dừng nhắc nhở</button>
     </div>
 
     <script>
@@ -93,11 +111,12 @@
         tg.ready();
         tg.expand();
 
-        function sendChoice(val) {
+        function sendAction(val) {
+            // Hiệu ứng rung phản hồi trên smartphone
             if (tg.HapticFeedback) {
                 tg.HapticFeedback.impactOccurred('medium');
             }
-            // Gửi dữ liệu về bot Python và đóng cửa sổ Web App
+            // Gửi chuỗi giá trị về bot Python và đóng giao diện
             tg.sendData(val);
             tg.close();
         }
