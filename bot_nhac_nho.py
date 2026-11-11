@@ -20,9 +20,9 @@ async def send_menu(chat_id, context):
     """Hàm gửi menu 3 nút bấm"""
     keyboard = [
         [
-            InlineKeyboardButton("10 Phút", callback_data="time_10"),
-            InlineKeyboardButton("20 Phút", callback_data="time_20"),
-            InlineKeyboardButton("30 Phút", callback_data="time_30")
+            InlineKeyboardButton("10 Phút", callback_data="time_9"),  # Trừ 1 phút (còn 9 phút)
+            InlineKeyboardButton("20 Phút", callback_data="time_19"), # Trừ 1 phút (còn 19 phút)
+            InlineKeyboardButton("30 Phút", callback_data="time_29")  # Trừ 1 phút (còn 29 phút)
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -47,46 +47,54 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_menu(chat_id, context)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý sự kiện bấm các nút 10, 20, 30 phút"""
+    """Xử lý sự kiện bấm các nút thời gian"""
     query = update.callback_query
-    await query.answer()
+    user = query.from_user
+    user_id = user.id
+    user_name = user.full_name
     
     chat_id = query.message.chat_id
     data = query.data
     
-    if data == "time_10":
-        minutes = 10
-    elif data == "time_20":
-        minutes = 20
-    elif data == "time_30":
-        minutes = 30
+    if data == "time_9":
+        minutes = 9
+        display_text = "10 phút (nhắc sau 9 phút)"
+    elif data == "time_19":
+        minutes = 19
+        display_text = "20 phút (nhắc sau 19 phút)"
+    elif data == "time_29":
+        minutes = 29
+        display_text = "30 phút (nhắc sau 29 phút)"
     else:
         return
 
-    # Hủy lịch nhắc cũ nếu có
+    # Hủy lịch nhắc cũ của nhóm nếu có
     if chat_id in active_reminders:
         active_reminders[chat_id].cancel()
 
+    await query.answer(f"Đã ghi nhận yêu cầu của bạn!")
     await query.edit_message_text(
-        text=f"✅ Đã đặt hẹn giờ nhắc nhở sau **{minutes} phút** tới!",
+        text=f"✅ **{user_name}** đã đặt hẹn giờ **{display_text}**!",
         parse_mode="Markdown"
     )
 
-    # Chạy đồng hồ đếm ngược
-    task = context.application.create_task(reminder_countdown(chat_id, minutes, context))
+    # Chạy đồng hồ đếm ngược và lưu kèm user_id & user_name
+    task = context.application.create_task(reminder_countdown(chat_id, minutes, user_id, user_name, context))
     active_reminders[chat_id] = task
 
-async def reminder_countdown(chat_id: int, minutes: int, context: ContextTypes.DEFAULT_TYPE):
-    """Đợi đủ thời gian rồi lặp lại thông báo mỗi 5 giây cho đến khi bấm OK"""
+async def reminder_countdown(chat_id: int, minutes: int, target_user_id: int, target_user_name: str, context: ContextTypes.DEFAULT_TYPE):
+    """Đợi đủ thời gian rồi lặp lại thông báo mỗi 5 giây gọi tên người đó"""
     try:
+        # Chờ đợi số phút (đã trừ 1 phút)
         await asyncio.sleep(minutes * 60)
+        
         while True:
-            keyboard = [[InlineKeyboardButton("OK (Đã đánh thẻ)", callback_data="acknowledge_ok")]]
+            keyboard = [[InlineKeyboardButton("OK (Đã đánh thẻ)", callback_data=f"ok_{target_user_id}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="⏰ **ĐÃ ĐẾN GIỜ ĐÁNH THẺ / CLOCK OUT!**\nVui lòng bấm nút OK bên dưới để xác nhận.",
+                text=f"⏰ [{target_user_name}](tg://user?id={target_user_id}) **ĐÃ ĐẾN GIỜ ĐÁNH THẺ / CLOCK OUT!**\nVui lòng bấm nút OK bên dưới để xác nhận.",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
@@ -95,20 +103,30 @@ async def reminder_countdown(chat_id: int, minutes: int, context: ContextTypes.D
         logger.info(f"Đã hủy lịch nhắc cho chat_id: {chat_id}")
 
 async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý khi bấm nút OK xác nhận"""
+    """Xử lý khi bấm nút OK (Kiểm tra đúng người bấm mới cho qua)"""
     query = update.callback_query
-    await query.answer()
+    user = query.from_user
+    data = query.data
     
-    if query.data == "acknowledge_ok":
-        chat_id = query.message.chat_id
-        if chat_id in active_reminders:
-            active_reminders[chat_id].cancel()
-            del active_reminders[chat_id]
-            
-        await query.edit_message_text(
-            text="👍 **Đã xác nhận!** Đã tắt thông báo nhắc nhở.",
-            parse_mode="Markdown"
-        )
+    # Tách lấy user_id được phép bấm từ callback_data
+    target_user_id_str = data.split("_")[1]
+    
+    if str(user.id) != target_user_id_str:
+        # Nếu không phải là người đã bấm đặt lịch
+        await query.answer("⚠️ Bạn không phải là người đặt lịch này nên không thể bấm OK!", show_alert=True)
+        return
+
+    await query.answer()
+    chat_id = query.message.chat_id
+    
+    if chat_id in active_reminders:
+        active_reminders[chat_id].cancel()
+        del active_reminders[chat_id]
+        
+    await query.edit_message_text(
+        text=f"👍 **{user.full_name} đã xác nhận hoàn thành!** Đã tắt thông báo nhắc nhở.",
+        parse_mode="Markdown"
+    )
 
 def main():
     application = ApplicationBuilder().token(TOKEN).build()
@@ -117,7 +135,7 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
     application.add_handler(CallbackQueryHandler(button_callback, pattern="^time_"))
-    application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^acknowledge_ok$"))
+    application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^ok_"))
 
     print("Bot đang chạy...")
     application.run_polling()
