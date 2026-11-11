@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Thay thế bằng Token thật do BotFather cấp
 TOKEN = "9042194702:AAEuNzFXtzz27GWq3MMDv9BOHZqhFVg4UxM"
 
-# Link Web App chính xác của bạn trên GitHub Pages (Đã sửa lại đúng định dạng)
+# Link Web App trên GitHub Pages
 WEB_APP_URL = "https://loveangel1196.github.io/bot-nhac-the/"
 
 # Múi giờ Việt Nam (GMT+7)
@@ -25,14 +25,12 @@ TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 active_reminders = {}
 
 def get_user_mention(user):
-    """Lấy định dạng gọi tên chuẩn @username hoặc link profile"""
     if user.username:
         return f"@{user.username}"
     else:
         return f"[{user.full_name}](tg://user?id={user.id})"
 
 async def send_menu(chat_id, context):
-    """Gửi tin nhắn kèm nút mở Web App có màu sắc tùy chỉnh"""
     keyboard = [
         [InlineKeyboardButton("🎨 Mở bảng chọn thời gian (Mini App)", web_app=WebAppInfo(url=WEB_APP_URL))]
     ]
@@ -45,11 +43,9 @@ async def send_menu(chat_id, context):
     )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý lệnh /start hoặc /menu"""
     await send_menu(update.effective_chat.id, context)
 
 async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tự động gửi menu ngay khi bot được thêm vào nhóm"""
     result = update.my_chat_member
     if result:
         new_member = result.new_chat_member
@@ -59,7 +55,6 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_menu(chat_id, context)
 
 async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Nhận dữ liệu khi người dùng bấm các nút màu sắc trong Web App"""
     if not update.effective_message or not update.effective_message.web_app_data:
         return
         
@@ -69,7 +64,6 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = user.id
     user_mention = get_user_mention(user)
 
-    # Xử lý khi bấm nút dừng từ Web App
     if data == "dung":
         if chat_id in active_reminders:
             active_reminders[chat_id]['task'].cancel()
@@ -82,7 +76,6 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("⚠️ Hiện tại nhóm không có lịch nhắc nào đang chạy.")
         return
 
-    # Ánh xạ thời gian (Trừ 1 phút)
     minutes_map = {
         "10": (9, 10),
         "20": (19, 20),
@@ -95,7 +88,6 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
         if chat_id in active_reminders:
             active_reminders[chat_id]['task'].cancel()
 
-        # Tính toán thời gian cụ thể (Giờ:Phút:Giây)
         now_vn = datetime.now(TIMEZONE)
         reminder_time = now_vn + timedelta(minutes=wait_minutes)
         time_str = reminder_time.strftime("%H:%M:%S")
@@ -109,7 +101,6 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
         active_reminders[chat_id] = {'task': task, 'user_id': user_id}
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Hỗ trợ gõ chữ 'dừng' trực tiếp trên khung chat"""
     if not update.message or not update.message.text:
         return
     text = update.message.text.strip().lower()
@@ -129,16 +120,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("⚠️ Hiện tại nhóm không có lịch nhắc nào đang chạy.")
 
 async def reminder_countdown(chat_id: int, wait_minutes: int, target_user_id: int, user_mention: str, context: ContextTypes.DEFAULT_TYPE):
-    """Đợi hết thời gian rồi réo tên tài khoản kèm nút OK"""
     try:
         await asyncio.sleep(wait_minutes * 60)
-        
         while True:
             keyboard = [
                 [InlineKeyboardButton("🚨 OK (XÁC NHẬN ĐÁNH THẺ)", callback_data=f"ok_{target_user_id}")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=f"⏰ {user_mention} **ĐÃ ĐẾN GIỜ ĐÁNH THẺ / CLOCK OUT!**\nVui lòng bấm nút OK bên dưới để xác nhận hoàn thành.",
@@ -150,7 +138,6 @@ async def reminder_countdown(chat_id: int, wait_minutes: int, target_user_id: in
         logger.info(f"Đã hủy lịch nhắc cho chat_id: {chat_id}")
 
 async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Kiểm tra đúng người được tag mới cho bấm OK"""
     query = update.callback_query
     user = query.from_user
     data = query.data
@@ -176,7 +163,6 @@ async def acknowledge_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 def main():
     application = ApplicationBuilder().token(TOKEN).build()
 
-    # Đăng ký handlers
     application.add_handler(CommandHandler(["start", "menu"], start))
     application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
     application.add_handler(MessageHandler(filters.WEB_APP_DATA, handle_web_app_data))
