@@ -2,72 +2,104 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Bảng Đánh Thẻ</title>
-    <!-- Thư viện chính thức của Telegram Web App -->
+    <!-- Thư viện Telegram Web App SDK chính thức -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #18191c);
+            --text-color: var(--tg-theme-text-color, #ffffff);
+            --hint-color: var(--tg-theme-hint-color, #8e8e93);
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--tg-theme-bg-color, #1f2125);
-            color: var(--tg-theme-text-color, #ffffff);
+            background-color: var(--bg-color);
+            color: var(--text-color);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 90vh;
             margin: 0;
-            padding: 20px;
+            padding: 16px;
             box-sizing: border-box;
+            user-select: none;
         }
         h3 {
-            margin-bottom: 20px;
+            margin: 0 0 8px 0;
+            font-size: 20px;
+            text-align: center;
+        }
+        p {
+            margin: 0 0 24px 0;
+            font-size: 14px;
+            color: var(--hint-color);
             text-align: center;
         }
         .grid-container {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
+            gap: 12px;
             width: 100%;
-            max-width: 400px;
+            max-width: 360px;
         }
         .btn {
-            padding: 15px 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 18px 8px;
             font-size: 16px;
-            font-weight: bold;
+            font-weight: 600;
             border: none;
-            border-radius: 8px;
-            color: white;
+            border-radius: 12px;
+            color: #ffffff;
             cursor: pointer;
-            text-align: center;
-            transition: opacity 0.2s;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            transition: transform 0.1s ease, opacity 0.2s ease;
         }
         .btn:active {
-            opacity: 0.7;
+            transform: scale(0.96);
+            opacity: 0.85;
         }
-        /* Tùy chỉnh màu sắc từng nút theo ý thích */
-        .btn-green-1 { background-color: #28a745; } /* Xanh lá */
-        .btn-green-2 { background-color: #20c997; } /* Xanh ngọc */
-        .btn-red { background-color: #dc3545; grid-column: span 3; } /* Đỏ toàn hàng */
+        .btn-time {
+            background: linear-gradient(135deg, #10b981, #059669); /* Xanh ngọc lục bảo */
+        }
+        .btn-stop {
+            background: linear-gradient(135deg, #ef4444, #b91c1c); /* Đỏ nổi bật */
+            grid-column: span 3;
+            padding: 16px;
+            margin-top: 6px;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
 
-    <h3>Chọn thời gian nhắc nhở đánh thẻ</h3>
+    <h3>Bảng Điều Khiển Đánh Thẻ</h3>
+    <p>Chọn mốc thời gian bạn muốn hẹn giờ nhắc nhở</p>
+
     <div class="grid-container">
-        <button class="btn btn-green-1" onclick="sendData(10)">10 Phút</button>
-        <button class="btn btn-green-1" onclick="sendData(20)">20 Phút</button>
-        <button class="btn btn-green-1" onclick="sendData(30)">30 Phút</button>
-        <button class="btn btn-red" onclick="sendData('dung')">🛑 Dừng nhắc nhở</button>
+        <button class="btn btn-time" onclick="chooseTime(10)">⏱ 10 Phút</button>
+        <button class="btn btn-time" onclick="chooseTime(20)">⏱ 20 Phút</button>
+        <button class="btn btn-time" onclick="chooseTime(30)">⏱ 30 Phút</button>
+        <button class="btn btn-stop" onclick="chooseTime('dung')">🛑 Dừng nhắc nhở</button>
     </div>
 
     <script>
-        let tg = window.Telegram.WebApp;
-        tg.expand(); // Mở rộng khung Web App toàn màn hình
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
 
-        function sendData(value) {
-            // Gửi dữ liệu về bot Python qua WebApp data
+        function chooseTime(value) {
+            // Rung phản hồi thao tác trên điện thoại
+            if (tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+            // Gửi dữ liệu về bot và đóng Web App
             tg.sendData(value.toString());
+            tg.close();
         }
     </script>
 </body>
