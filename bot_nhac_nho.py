@@ -2,7 +2,7 @@ import logging
 import asyncio
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMember
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ChatMember
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, ChatMemberHandler, MessageHandler, filters
 
 # Cấu hình logging
@@ -21,6 +21,13 @@ TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 # Lưu trữ tiến trình nhắc nhở theo chat_id
 active_reminders = {}
 
+def get_reply_keyboard():
+    """Tạo bàn phím nút bấm cố định ở khung nhập chat"""
+    keyboard = [
+        [KeyboardButton("10 Phút"), KeyboardButton("20 Phút"), KeyboardButton("30 Phút")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
+
 def get_user_mention(user):
     """Lấy định dạng gọi tên chuẩn @username hoặc link profile"""
     if user.username:
@@ -29,19 +36,11 @@ def get_user_mention(user):
         return f"[{user.full_name}](tg://user?id={user.id})"
 
 async def send_menu(chat_id, context):
-    """Gửi bảng menu 3 nút bấm Inline"""
-    keyboard = [
-        [
-            InlineKeyboardButton("🟢 10 Phút", callback_data="time_9"),
-            InlineKeyboardButton("🟡 20 Phút", callback_data="time_19"),
-            InlineKeyboardButton("🔴 30 Phút", callback_data="time_29")
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    """Gửi tin nhắn kèm bàn phím cố định ở ô chat"""
     await context.bot.send_message(
         chat_id=chat_id,
-        text="👋 **Nhắc đánh thẻ Bot**\nVui lòng bấm chọn thời gian bên dưới hoặc gõ số (`10`, `20`, `30`).",
-        reply_markup=reply_markup,
+        text="👋 **Nhắc đánh thẻ Bot**\nVui lòng bấm chọn thời gian ở bàn phím bên dưới hoặc gõ `dừng` nếu muốn hủy:",
+        reply_markup=get_reply_keyboard(),
         parse_mode="Markdown"
     )
 
@@ -60,7 +59,7 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_menu(chat_id, context)
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý khi người dùng nhắn tin số hoặc chữ 'dừng'"""
+    """Xử lý khi người dùng bấm nút ở ô chat hoặc nhắn chữ 'dừng'"""
     if not update.message or not update.message.text:
         return
         
@@ -70,128 +69,55 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = user.id
     user_mention = get_user_mention(user)
     
-    # Xử lý lệnh dừng bằng tin nhắn văn bản
+    # Xử lý lệnh dừng
     if text in ["dừng", "dung"]:
         if chat_id in active_reminders:
-            reminder_info = active_reminders[chat_id]
-            reminder_info['task'].cancel()
+            active_reminders[chat_id]['task'].cancel()
             del active_reminders[chat_id]
             await update.message.reply_text(
                 text=f"🛑 **{user_mention}** đã hủy lịch nhắc nhở thành công!",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                reply_markup=get_reply_keyboard()
             )
         else:
-            await update.message.reply_text("⚠️ Hiện tại nhóm không có lịch nhắc nào đang chạy.")
+            await update.message.reply_text("⚠️ Hiện tại nhóm không có lịch nhắc nào đang chạy.", reply_markup=get_reply_keyboard())
         return
 
     minutes_map = {
-        "10": (9, 10, "10 phút"),
-        "20": (19, 20, "20 phút"),
-        "30": (29, 30, "30 phút")
+        "10 phút": (9, 10),
+        "20 phút": (19, 20),
+        "30 phút": (29, 30),
+        "10": (9, 10),
+        "20": (19, 20),
+        "30": (29, 30)
     }
     
     if text in minutes_map:
-        wait_minutes, original_minutes, display_text = minutes_map[text]
+        wait_minutes, original_minutes = minutes_map[text]
         
         if chat_id in active_reminders:
             active_reminders[chat_id]['task'].cancel()
 
-        # Tính toán thời gian cụ thể sẽ nhắc nhở (Giờ:Phút:Giây) theo múi giờ VN
-        now_vn = datetime.now(TIMEZONE)
-        reminder_time = now_vn + timedelta(minutes=wait_minutes)
-        time_str = reminder_time.strftime("%H:%M:%S")
-
-        # Nút Dừng chỉ xuất hiện ở tin nhắn ban đầu này
-        keyboard = [
-            [InlineKeyboardButton("🛑 Dừng nhắc nhở", callback_data=f"stop_{user_id}")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        await update.message.reply_text(
-            text=f"✅ {user_mention} đã đặt hẹn thành công **{original_minutes} phút**.\nBot sẽ nhắc nhở vào lúc: **{time_str}**",
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-
-        task = context.application.create_task(reminder_countdown(chat_id, wait_minutes, user_id, user_mention, context))
-        active_reminders[chat_id] = {'task': task, 'user_id': user_id}
-
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý sự kiện bấm nút thời gian"""
-    query = update.callback_query
-    user = query.from_user
-    user_id = user.id
-    user_mention = get_user_mention(user)
-    
-    chat_id = query.message.chat_id
-    data = query.data
-    
-    if data.startswith("time_"):
-        if data == "time_9":
-            wait_minutes, original_minutes = 9, 10
-        elif data == "time_19":
-            wait_minutes, original_minutes = 19, 20
-        elif data == "time_29":
-            wait_minutes, original_minutes = 29, 30
-        else:
-            return
-
-        if chat_id in active_reminders:
-            active_reminders[chat_id]['task'].cancel()
-
-        await query.answer("Đã ghi nhận!")
-        
         # Tính toán thời gian cụ thể (Giờ:Phút:Giây)
         now_vn = datetime.now(TIMEZONE)
         reminder_time = now_vn + timedelta(minutes=wait_minutes)
         time_str = reminder_time.strftime("%H:%M:%S")
 
-        # Nút Dừng chỉ xuất hiện ở đây
-        keyboard = [
-            [InlineKeyboardButton("🛑 Dừng nhắc nhở", callback_data=f"stop_{user_id}")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        await query.edit_message_text(
+        await update.message.reply_text(
             text=f"✅ {user_mention} đã đặt hẹn thành công **{original_minutes} phút**.\nBot sẽ nhắc nhở vào lúc: **{time_str}**",
-            reply_markup=reply_markup,
+            reply_markup=get_reply_keyboard(),
             parse_mode="Markdown"
         )
 
         task = context.application.create_task(reminder_countdown(chat_id, wait_minutes, user_id, user_mention, context))
         active_reminders[chat_id] = {'task': task, 'user_id': user_id}
 
-async def stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý khi bấm nút Dừng ở tin nhắn ban đầu"""
-    query = update.callback_query
-    user = query.from_user
-    data = query.data
-    
-    target_user_id_str = data.split("_")[1]
-    
-    if str(user.id) != target_user_id_str:
-        await query.answer("⚠️ Bạn không phải là người tạo lịch này nên không thể bấm Dừng!", show_alert=True)
-        return
-
-    await query.answer("Đã hủy lịch nhắc!")
-    chat_id = query.message.chat_id
-    
-    if chat_id in active_reminders:
-        active_reminders[chat_id]['task'].cancel()
-        del active_reminders[chat_id]
-        
-    await query.edit_message_text(
-        text=f"🛑 **{user.full_name} đã hủy lịch nhắc nhở.**",
-        parse_mode="Markdown"
-    )
-
 async def reminder_countdown(chat_id: int, wait_minutes: int, target_user_id: int, user_mention: str, context: ContextTypes.DEFAULT_TYPE):
-    """Đợi hết thời gian rồi réo tên tài khoản kèm nút OK (Không còn nút Dừng ở đây)"""
+    """Đợi hết thời gian rồi réo tên tài khoản kèm nút OK"""
     try:
         await asyncio.sleep(wait_minutes * 60)
         
         while True:
-            # Khi đã đến giờ nhắc nhở, chỉ có duy nhất nút OK
             keyboard = [
                 [InlineKeyboardButton("🚨 OK (XÁC NHẬN ĐÁNH THẺ)", callback_data=f"ok_{target_user_id}")]
             ]
@@ -238,8 +164,6 @@ def main():
     application.add_handler(CommandHandler(["start", "menu"], start))
     application.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-    application.add_handler(CallbackQueryHandler(button_callback, pattern="^time_"))
-    application.add_handler(CallbackQueryHandler(stop_callback, pattern="^stop_"))
     application.add_handler(CallbackQueryHandler(acknowledge_callback, pattern="^ok_"))
 
     print("Bot đang chạy...")
